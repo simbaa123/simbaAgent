@@ -1,9 +1,11 @@
+import path from "node:path";
 import { createAgent, tool } from "langchain";
 import { ChatOpenAI } from "@langchain/openai";
 import { z } from "zod";
 import type { Response } from "express";
 import { loadSampleData, snippetFromContent } from "./dataStore";
 import { sendSseEvent, sleep } from "./sse";
+import { getFilesystemMcpClient, getSqliteMcpClient } from "./mcpClients";
 
 type PlanStep = { stepId: string; title: string; status: "pending" | "running" | "done" };
 
@@ -187,6 +189,220 @@ export async function runLangChainAgent(params: {
   const emitToolCall = (payload: any) => sendSseEvent(res, "tool_call", payload);
   const emitToolResult = (payload: any) => sendSseEvent(res, "tool_result", payload);
   let toolUsed = false;
+
+  const useMcp = env("USE_MCP") === "1";
+  const sqliteUrl = env("MCP_SQLITE_URL") || "sqlite://./data/agent.sqlite";
+  let sqliteSchemaReady = false;
+
+  async function ensureSqliteSchema() {
+    if (!useMcp || sqliteSchemaReady) return;
+    const client = await getSqliteMcpClient({ url: sqliteUrl });
+    await client.callTool({
+      name: "sqlite_ddl",
+      arguments: {
+        query:
+          "CREATE TABLE IF NOT EXISTS audit_requests (" +
+          "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+          "created_at TEXT NOT NULL," +
+          "conversation_id TEXT NOT NULL," +
+          "trace_id TEXT NOT NULL," +
+          "user_message TEXT NOT NULL" +
+          ");",
+        parameters: []
+      }
+    });
+    sqliteSchemaReady = true;
+  }
+
+  const exportConversationToFile =
+    useMcp
+      ? tool(
+          async ({ format }: { format?: "md" | "json" }) => {
+            const started = Date.now();
+            const toolCallId = `tc_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+            toolUsed = true;
+            emitToolCall({
+              toolCallId,
+              traceId,
+              conversationId,
+              stepId: "step_02",
+              toolName: "exportConversationToFile",
+              inputRedacted: { format: format ?? "md" },
+              outputRedacted: {},
+              status: "success",
+              latencyMs: 0,
+              error: null,
+              createdAt: new Date().toISOString()
+            });
+
+            const fsClient = await getFilesystemMcpClient({
+              allowedDirs: [path.resolve(process.cwd(), "exports")]
+            });
+            const exportsDir = path.resolve(process.cwd(), "exports");
+            await fsClient.callTool({ name: "create_directory", arguments: { path: exportsDir } });
+
+            const msgs = data.messages
+              .filter((m: any) => m.conversationId === conversationId)
+              .map((m: any) => `- [${m.createdAt}] ${m.role}: ${m.content}`)
+              .join("\n");
+
+            const content =
+              (format ?? "md") === "json"
+                ? JSON.stringify({ conversationId, traceId, messages: data.messages.filter((m: any) => m.conversationId === conversationId) }, null, 2)
+                : `# Conversation ${conversationId}\n\ntraceId: ${traceId}\n\n${msgs}\n`;
+
+            const ext = (format ?? "md") === "json" ? "json" : "md";
+            const outPath = path.resolve(exportsDir, `${conversationId}_${Date.now()}.${ext}`);
+            await fsClient.callTool({ name: "write_file", arguments: { path: outPath, content } });
+
+            const output = { ok: true, path: outPath };
+            emitToolResult({
+              toolCallId: `${toolCallId}_r`,
+              traceId,
+              conversationId,
+              stepId: "step_02",
+              toolName: "exportConversationToFile",
+              inputRedacted: { format: format ?? "md" },
+              outputRedacted: output,
+              status: "success",
+              latencyMs: Date.now() - started,
+              error: null,
+              createdAt: new Date().toISOString()
+            });
+            return output;
+          },
+          {
+            name: "exportConversationToFile",
+            description: "将当前会话导出为 markdown/json 文件并返回文件路径（通过 MCP filesystem 写入 exports 目录）",
+            schema: z.object({
+              format: z.enum(["md", "json"]).optional()
+            })
+          }
+        )
+      : null;
+
+  const sqliteQuery =
+    useMcp
+      ? tool(
+          async ({ query, parameters }: { query: string; parameters?: unknown[] }) => {
+            if (!/^\s*select\b/i.test(query)) throw new Error("sqliteQuery 仅支持 SELECT 查询");
+            const started = Date.now();
+            const toolCallId = `tc_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+            toolUsed = true;
+            emitToolCall({
+              toolCallId,
+              traceId,
+              conversationId,
+              stepId: "step_02",
+              toolName: "sqliteQuery",
+              inputRedacted: { query, parameters: Array.isArray(parameters) ? parameters : [] },
+              outputRedacted: {},
+              status: "success",
+              latencyMs: 0,
+              error: null,
+              createdAt: new Date().toISOString()
+            });
+
+            await ensureSqliteSchema();
+            const client = await getSqliteMcpClient({ url: sqliteUrl });
+
+            await client.callTool({
+              name: "sqlite_insert",
+              arguments: {
+                query: "INSERT INTO audit_requests (created_at, conversation_id, trace_id, user_message) VALUES (?, ?, ?, ?)",
+                parameters: [new Date().toISOString(), conversationId, traceId, userMessage]
+              }
+            });
+
+            const result = await client.callTool({
+              name: "sqlite_query",
+              arguments: { query, parameters: Array.isArray(parameters) ? parameters : [] }
+            });
+
+            const output = { result };
+            emitToolResult({
+              toolCallId: `${toolCallId}_r`,
+              traceId,
+              conversationId,
+              stepId: "step_02",
+              toolName: "sqliteQuery",
+              inputRedacted: { query, parameters: Array.isArray(parameters) ? parameters : [] },
+              outputRedacted: { ok: true },
+              status: "success",
+              latencyMs: Date.now() - started,
+              error: null,
+              createdAt: new Date().toISOString()
+            });
+            return output;
+          },
+          {
+            name: "sqliteQuery",
+            description: "通过 MCP sqlite 执行 SELECT 查询（同时会写入一条 audit_requests 审计记录）",
+            schema: z.object({
+              query: z.string().min(1),
+              parameters: z.array(z.any()).optional()
+            })
+          }
+        )
+      : null;
+
+  if (useMcp) {
+    const t = userMessage.trim();
+    const exportMatch = t.match(/^\/export(?:\s+(md|json))?$/i);
+    if (exportMatch && exportConversationToFile) {
+      const format = (exportMatch[1]?.toLowerCase() as "md" | "json" | undefined) ?? "md";
+      const out = await exportConversationToFile.invoke({ format });
+      const outPath = (out as any)?.path as string | undefined;
+      if (outPath) {
+        sendSseEvent(res, "export_ready", {
+          traceId,
+          format,
+          path: outPath
+        });
+      }
+      await streamText(res, traceId, `已导出：${(out as any)?.path ?? ""}`);
+      return;
+    }
+
+    const auditMatch = t.match(/^\/audit$/i);
+    if (auditMatch && sqliteQuery) {
+      const query =
+        "SELECT id, created_at, conversation_id, trace_id, user_message " +
+        "FROM audit_requests " +
+        "WHERE conversation_id = ? " +
+        "ORDER BY id DESC " +
+        "LIMIT 20";
+      const out = await sqliteQuery.invoke({ query, parameters: [conversationId] });
+      const text = (out as any)?.result?.content?.find?.((c: any) => c?.type === "text")?.text;
+      let rows: any[] = [];
+      if (typeof text === "string") {
+        try {
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed?.rows)) rows = parsed.rows;
+        } catch {}
+      }
+      sendSseEvent(res, "sqlite_result", { traceId, query, rows });
+      await streamText(res, traceId, `已返回最近审计（${rows.length}条）`);
+      return;
+    }
+
+    const sqlMatch = t.match(/^\/sql\s+([\s\S]+)$/i);
+    if (sqlMatch && sqliteQuery) {
+      const query = sqlMatch[1].trim();
+      const out = await sqliteQuery.invoke({ query, parameters: [] });
+      const text = (out as any)?.result?.content?.find?.((c: any) => c?.type === "text")?.text;
+      let rows: any[] = [];
+      if (typeof text === "string") {
+        try {
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed?.rows)) rows = parsed.rows;
+        } catch {}
+      }
+      sendSseEvent(res, "sqlite_result", { traceId, query, rows });
+      await streamText(res, traceId, `已返回查询结果（${rows.length}行）`);
+      return;
+    }
+  }
 
   if (context?.confirm?.action === "create_return_request") {
     const payload = (context.confirm.payload ?? {}) as any;
@@ -883,12 +1099,17 @@ export async function runLangChainAgent(params: {
     "1) 不确定就追问缺失信息（订单号或手机号后四位）。",
     "2) 事实必须来自工具返回（订单字段/物流轨迹/知识库命中），不要编造。",
     "3) 回答需要给出引用：订单引用写“订单号：<orderNo>”，知识库引用写“条款引用：<articleId>”。",
-    "4) 当前只支持：查物流轨迹、政策/SOP 问答；不要承诺退款/改址等敏感动作。"
+    "4) 当前只支持：查物流轨迹、政策/SOP 问答；不要承诺退款/改址等敏感动作。",
+    "5) 如用户要求导出会话或查询本地 sqlite，可调用 exportConversationToFile / sqliteQuery（仅用于演示与自查）。"
   ].join("\n");
+
+  const tools: any[] = [searchOrders, getOrderDetail, getShipmentTracking, kbSearch].filter(Boolean);
+  if (exportConversationToFile) tools.push(exportConversationToFile);
+  if (sqliteQuery) tools.push(sqliteQuery);
 
   const agent = createAgent({
     model,
-    tools: [searchOrders, getOrderDetail, getShipmentTracking, kbSearch]
+    tools
   });
 
   const priorMessages = data.messages

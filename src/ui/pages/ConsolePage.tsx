@@ -29,6 +29,18 @@ type NeedConfirmEvent = {
   details: any;
 };
 
+type ExportReadyEvent = {
+  traceId: string;
+  format: "md" | "json";
+  path: string;
+};
+
+type SqliteResultEvent = {
+  traceId: string;
+  query: string;
+  rows: Record<string, unknown>[];
+};
+
 type StreamEvent =
   | { event: "plan_update"; data: { traceId: string; steps: PlanStep[] } }
   | { event: "assistant_delta"; data: { traceId: string; delta: string } }
@@ -36,6 +48,8 @@ type StreamEvent =
   | { event: "tool_result"; data: ToolCallLog }
   | { event: "need_choice"; data: NeedChoiceEvent }
   | { event: "need_confirm"; data: NeedConfirmEvent }
+  | { event: "export_ready"; data: ExportReadyEvent }
+  | { event: "sqlite_result"; data: SqliteResultEvent }
   | { event: "final"; data: { traceId: string } }
   | { event: "error"; data: { traceId: string; message: string } };
 
@@ -80,6 +94,8 @@ export default function ConsolePage() {
   const [pendingChoice, setPendingChoice] = useState<NeedChoiceEvent | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<NeedConfirmEvent | null>(null);
   const [lastUserMessage, setLastUserMessage] = useState<string>("");
+  const [exportReady, setExportReady] = useState<ExportReadyEvent | null>(null);
+  const [sqliteResult, setSqliteResult] = useState<SqliteResultEvent | null>(null);
 
   const assistantDraftRef = useRef<string>("");
 
@@ -193,6 +209,14 @@ export default function ConsolePage() {
           setPendingConfirm(ev.data);
         }
 
+        if (ev.event === "export_ready") {
+          setExportReady(ev.data);
+        }
+
+        if (ev.event === "sqlite_result") {
+          setSqliteResult(ev.data);
+        }
+
         if (ev.event === "error") setError(ev.data.message);
       }
     }
@@ -300,6 +324,132 @@ export default function ConsolePage() {
               );
             })
           )}
+
+          <div style={{ marginTop: 12, fontWeight: 700, marginBottom: 8 }}>MCP 快捷操作</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <button
+              onClick={() => {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    messageId: `m_${Date.now()}`,
+                    conversationId: convId,
+                    role: "cs",
+                    content: "（系统）导出会话（md）",
+                    createdAt: new Date().toISOString(),
+                    citations: []
+                  }
+                ]);
+                void send({ text: "/export md", silentUserMessage: true });
+              }}
+              disabled={streaming}
+              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #ddd", cursor: "pointer" }}
+            >
+              导出会话
+            </button>
+            <button
+              onClick={() => {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    messageId: `m_${Date.now()}`,
+                    conversationId: convId,
+                    role: "cs",
+                    content: "（系统）查看最近审计",
+                    createdAt: new Date().toISOString(),
+                    citations: []
+                  }
+                ]);
+                void send({ text: "/audit", silentUserMessage: true });
+              }}
+              disabled={streaming}
+              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #ddd", cursor: "pointer" }}
+            >
+              查看最近审计
+            </button>
+          </div>
+
+          {exportReady ? (
+            <div style={{ marginTop: 10, border: "1px solid #ddd", borderRadius: 8, padding: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+                <div style={{ fontWeight: 700 }}>导出结果</div>
+                <div style={{ fontSize: 12, color: "#666" }}>{exportReady.format}</div>
+              </div>
+              <div style={{ marginTop: 8, fontSize: 12, color: "#666", wordBreak: "break-all" }}>
+                {exportReady.path}
+              </div>
+              <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button
+                  onClick={() => void navigator.clipboard.writeText(exportReady.path)}
+                  style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ddd", cursor: "pointer" }}
+                >
+                  复制路径
+                </button>
+                <button
+                  onClick={() => setExportReady(null)}
+                  style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ddd", cursor: "pointer" }}
+                >
+                  清除
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {sqliteResult ? (
+            <div style={{ marginTop: 10, border: "1px solid #ddd", borderRadius: 8, padding: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+                <div style={{ fontWeight: 700 }}>SQLite 结果</div>
+                <div style={{ fontSize: 12, color: "#666" }}>{sqliteResult.rows.length} 行</div>
+              </div>
+              <details style={{ marginTop: 6 }}>
+                <summary style={{ cursor: "pointer" }}>SQL</summary>
+                <pre style={{ marginTop: 8, whiteSpace: "pre-wrap", fontSize: 12 }}>
+{sqliteResult.query}
+                </pre>
+              </details>
+              <div style={{ marginTop: 10, overflow: "auto", border: "1px solid #eee", borderRadius: 8 }}>
+                {sqliteResult.rows.length === 0 ? (
+                  <div style={{ padding: 10, color: "#666" }}>无数据</div>
+                ) : (
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: "#fafafa" }}>
+                        {Object.keys(sqliteResult.rows[0] ?? {}).slice(0, 10).map((k) => (
+                          <th
+                            key={k}
+                            style={{ textAlign: "left", padding: "8px 10px", borderBottom: "1px solid #eee" }}
+                          >
+                            {k}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sqliteResult.rows.slice(0, 30).map((row, idx) => (
+                        <tr key={idx} style={{ borderBottom: "1px solid #f2f2f2" }}>
+                          {Object.keys(sqliteResult.rows[0] ?? {})
+                            .slice(0, 10)
+                            .map((k) => (
+                              <td key={k} style={{ padding: "8px 10px", verticalAlign: "top" }}>
+                                <div style={{ wordBreak: "break-word" }}>{String((row as any)?.[k] ?? "")}</div>
+                              </td>
+                            ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button
+                  onClick={() => setSqliteResult(null)}
+                  style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #ddd", cursor: "pointer" }}
+                >
+                  清除
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div style={{ marginTop: 12, fontWeight: 700, marginBottom: 8 }}>Plan</div>
           {planSteps.length === 0 ? (

@@ -5,6 +5,9 @@ import { z } from "zod";
 import { loadSampleData, snippetFromContent } from "./dataStore";
 import { initSse, sendSseEvent, sleep } from "./sse";
 import { runLangChainAgent } from "./langchainAgent";
+import { loadEnvFiles } from "./loadEnv";
+
+loadEnvFiles();
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -127,7 +130,10 @@ app.post("/api/chat/stream", async (req, res) => {
 
   if (process.env.USE_LANGCHAIN === "1") {
     const hasKey = Boolean(process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY);
-    if (!hasKey) {
+    const allowMcpOnlyCommand = Boolean(
+      process.env.USE_MCP === "1" && /^\/(export|sql|audit)\b/i.test(message)
+    );
+    if (!hasKey && !allowMcpOnlyCommand) {
       sendSseEvent(res, "error", {
         traceId,
         message: "未配置 OPENAI_API_KEY 或 DEEPSEEK_API_KEY，暂时无法启用 LangChain Agent。"
