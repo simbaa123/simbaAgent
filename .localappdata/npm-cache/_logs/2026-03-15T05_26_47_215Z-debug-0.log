@@ -1,0 +1,42 @@
+0 verbose cli C:\Program Files\nodejs\New Folder\node.exe C:\Program Files\nodejs\New Folder\node_modules\npm\bin\npm-cli.js
+1 info using npm@10.9.2
+2 info using node@v22.13.1
+3 silly config load:file:C:\Program Files\nodejs\New Folder\node_modules\npm\npmrc
+4 silly config load:file:D:\code\study\simbaAgent\.npmrc
+5 silly config load:file:C:\Users\Cathy\.npmrc
+6 silly config load:file:D:\code\study\simbaAgent\.appdata\npm\etc\npmrc
+7 verbose title npm exec create-next-app@16.1.6 apps/web --ts --eslint --tailwind --app --src-dir --import-alias @/* --use-npm
+8 verbose argv "exec" "--yes" "--" "create-next-app@16.1.6" "apps/web" "--ts" "--eslint" "--tailwind" "--app" "--src-dir" "--import-alias" "@/*" "--use-npm"
+9 verbose logfile logs-max:10 dir:D:\code\study\simbaAgent\.localappdata\npm-cache\_logs\2026-03-15T05_26_47_215Z-
+10 verbose logfile D:\code\study\simbaAgent\.localappdata\npm-cache\_logs\2026-03-15T05_26_47_215Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:2197815296 maxSize:549453824 maxEntrySize:274726912
+13 http fetch GET 200 https://registry.npmjs.org/npm 1103ms
+14 http fetch GET 200 https://registry.npmjs.org/create-next-app 1521ms (cache miss)
+15 silly packumentCache heap:2197815296 maxSize:549453824 maxEntrySize:274726912
+16 verbose Could not read global path D:\code\study\simbaAgent\.appdata\npm, ignoring
+17 silly packumentCache heap:2197815296 maxSize:549453824 maxEntrySize:274726912
+18 silly idealTree buildDeps
+19 silly fetch manifest create-next-app@16.1.6
+20 silly packumentCache full:https://registry.npmjs.org/create-next-app cache-miss
+21 http fetch GET 200 https://registry.npmjs.org/create-next-app 757ms (cache miss)
+22 silly packumentCache full:https://registry.npmjs.org/create-next-app set size:undefined disposed:false
+23 silly placeDep ROOT create-next-app@16.1.6 OK for:  want: 16.1.6
+24 silly reify moves {}
+25 silly audit bulk request { 'create-next-app': [ '16.1.6' ] }
+26 http cache create-next-app@https://registry.npmjs.org/create-next-app/-/create-next-app-16.1.6.tgz 1ms (cache hit)
+27 silly tarball no local data for create-next-app@https://registry.npmjs.org/create-next-app/-/create-next-app-16.1.6.tgz. Extracting by manifest.
+28 http fetch POST 200 https://registry.npmjs.org/-/npm/v1/security/advisories/bulk 228ms
+29 silly audit report {}
+30 http fetch GET 200 https://registry.npmjs.org/create-next-app/-/create-next-app-16.1.6.tgz 745ms (cache miss)
+31 verbose cwd D:\code\study\simbaAgent
+32 verbose os Windows_NT 10.0.19045
+33 verbose node v22.13.1
+34 verbose npm  v10.9.2
+35 notice
+35 notice New [31mmajor[39m version of npm available! [31m10.9.2[39m -> [34m11.11.1[39m
+35 notice Changelog: [34mhttps://github.com/npm/cli/releases/tag/v11.11.1[39m
+35 notice To update run: [4mnpm install -g npm@11.11.1[24m
+35 notice  { force: true, [Symbol(proc-log.meta)]: true }
+36 verbose exit 1
+37 verbose code 1

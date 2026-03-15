@@ -1,0 +1,153 @@
+{
+  "version": "1.0",
+  "scope": "milestone1",
+  "notes": [
+    "所有字段均为演示用途，包含脱敏后的 PII。",
+    "时间统一为 ISO-8601 字符串（UTC 或带时区偏移均可）。",
+    "金额单位默认元（CNY），可按需改为分（int）。"
+  ],
+  "entities": {
+    "users": {
+      "primaryKey": "userId",
+      "fields": {
+        "userId": "string (u_*)",
+        "nameMasked": "string",
+        "phoneMasked": "string",
+        "phoneLast4": "string(4)",
+        "createdAt": "string(iso)",
+        "riskFlags": "string[]"
+      }
+    },
+    "orders": {
+      "primaryKey": "orderId",
+      "fields": {
+        "orderId": "string (o_*)",
+        "orderNo": "string",
+        "userId": "string (u_*)",
+        "status": "string enum: paid|shipped|delivered|cancelled",
+        "paidAt": "string(iso)",
+        "totalAmount": "number",
+        "currency": "string",
+        "itemsSummary": "string"
+      }
+    },
+    "orderDetails": {
+      "primaryKey": "orderId",
+      "fields": {
+        "orderId": "string (o_*)",
+        "orderNo": "string",
+        "userId": "string (u_*)",
+        "status": "string enum: paid|shipped|delivered|cancelled",
+        "paidAt": "string(iso)",
+        "goodsAmount": "number",
+        "shippingFee": "number",
+        "discountAmount": "number",
+        "totalAmount": "number",
+        "currency": "string",
+        "receiver": {
+          "receiverNameMasked": "string",
+          "receiverPhoneMasked": "string",
+          "addressMasked": "string"
+        },
+        "items": [
+          {
+            "skuId": "string (sku_*)",
+            "title": "string",
+            "qty": "number",
+            "unitPrice": "number"
+          }
+        ],
+        "shipmentIds": "string[] (s_*)",
+        "aftersaleStatus": "string enum: none|in_progress|completed"
+      }
+    },
+    "shipments": {
+      "primaryKey": "shipmentId",
+      "fields": {
+        "shipmentId": "string (s_*)",
+        "carrier": "string",
+        "trackingNoMasked": "string",
+        "status": "string enum: in_transit|delivered|exception|returned",
+        "shippedAt": "string(iso)",
+        "deliveredAt": "string(iso) | null",
+        "exceptionCode": "string | null",
+        "events": [
+          {
+            "time": "string(iso)",
+            "location": "string",
+            "description": "string",
+            "code": "string | null"
+          }
+        ]
+      }
+    },
+    "kbArticles": {
+      "primaryKey": "articleId",
+      "fields": {
+        "articleId": "string (kb_*)",
+        "title": "string",
+        "content": "string",
+        "tags": "string[]",
+        "updatedAt": "string(iso)"
+      }
+    },
+    "conversations": {
+      "primaryKey": "conversationId",
+      "fields": {
+        "conversationId": "string (c_*)",
+        "createdAt": "string(iso)",
+        "status": "string enum: open|resolved",
+        "channel": "string enum: web|phone|other",
+        "assigneeId": "string | null",
+        "linkedUserId": "string (u_*) | null",
+        "linkedOrderId": "string (o_*) | null"
+      }
+    },
+    "messages": {
+      "primaryKey": "messageId",
+      "fields": {
+        "messageId": "string (m_*)",
+        "conversationId": "string (c_*)",
+        "role": "string enum: user|agent|cs",
+        "content": "string",
+        "createdAt": "string(iso)",
+        "citations": [
+          {
+            "type": "string enum: order_field|kb",
+            "ref": "string",
+            "quote": "string"
+          }
+        ]
+      }
+    },
+    "toolCalls": {
+      "primaryKey": "toolCallId",
+      "fields": {
+        "toolCallId": "string (tc_*)",
+        "traceId": "string (t_*)",
+        "conversationId": "string (c_*)",
+        "stepId": "string (step_*)",
+        "toolName": "string",
+        "inputRedacted": "object",
+        "outputRedacted": "object",
+        "status": "string enum: success|fail",
+        "latencyMs": "number",
+        "error": {
+          "code": "string",
+          "message": "string"
+        },
+        "createdAt": "string(iso)"
+      }
+    },
+    "indexes": {
+      "notes": [
+        "indexes 用于 mock 阶段快速检索，实际项目可用数据库索引/缓存替代。"
+      ],
+      "fields": {
+        "ordersByOrderNo": "Record<string, string>",
+        "usersByPhoneLast4": "Record<string, string[]>",
+        "ordersByUserId": "Record<string, string[]>"
+      }
+    }
+  }
+}

@@ -1,0 +1,538 @@
+{
+  "meta": {
+    "version": "1.0",
+    "generatedAt": "2026-03-15T10:00:00+08:00",
+    "currency": "CNY",
+    "piiPolicy": "All PII masked; phoneLast4 only for lookup"
+  },
+  "users": [
+    {
+      "userId": "u_1001",
+      "nameMasked": "张*",
+      "phoneMasked": "188****1024",
+      "phoneLast4": "1024",
+      "createdAt": "2025-11-02T09:12:00+08:00",
+      "riskFlags": []
+    },
+    {
+      "userId": "u_1002",
+      "nameMasked": "李**",
+      "phoneMasked": "177****7788",
+      "phoneLast4": "7788",
+      "createdAt": "2025-12-18T18:40:00+08:00",
+      "riskFlags": ["high_return_rate"]
+    },
+    {
+      "userId": "u_1003",
+      "nameMasked": "王*",
+      "phoneMasked": "139****3344",
+      "phoneLast4": "3344",
+      "createdAt": "2026-01-05T11:20:00+08:00",
+      "riskFlags": []
+    },
+    {
+      "userId": "u_1004",
+      "nameMasked": "赵**",
+      "phoneMasked": "166****8899",
+      "phoneLast4": "8899",
+      "createdAt": "2026-02-14T15:01:00+08:00",
+      "riskFlags": ["address_anomaly"]
+    },
+    {
+      "userId": "u_1005",
+      "nameMasked": "陈*",
+      "phoneMasked": "155****5566",
+      "phoneLast4": "5566",
+      "createdAt": "2026-02-28T20:33:00+08:00",
+      "riskFlags": []
+    }
+  ],
+  "orders": [
+    {
+      "orderId": "o_2001",
+      "orderNo": "E202603010001",
+      "userId": "u_1001",
+      "status": "shipped",
+      "paidAt": "2026-03-01T10:08:12+08:00",
+      "totalAmount": 129.0,
+      "currency": "CNY",
+      "itemsSummary": "2件｜充电头、数据线"
+    },
+    {
+      "orderId": "o_2002",
+      "orderNo": "E202603020016",
+      "userId": "u_1002",
+      "status": "delivered",
+      "paidAt": "2026-03-02T09:44:01+08:00",
+      "totalAmount": 268.0,
+      "currency": "CNY",
+      "itemsSummary": "1件｜蓝牙耳机"
+    },
+    {
+      "orderId": "o_2003",
+      "orderNo": "E202603030105",
+      "userId": "u_1003",
+      "status": "paid",
+      "paidAt": "2026-03-03T21:12:33+08:00",
+      "totalAmount": 89.0,
+      "currency": "CNY",
+      "itemsSummary": "1件｜手机壳"
+    },
+    {
+      "orderId": "o_2004",
+      "orderNo": "E202603040042",
+      "userId": "u_1004",
+      "status": "shipped",
+      "paidAt": "2026-03-04T12:20:18+08:00",
+      "totalAmount": 399.0,
+      "currency": "CNY",
+      "itemsSummary": "1件｜路由器"
+    },
+    {
+      "orderId": "o_2005",
+      "orderNo": "E202603050077",
+      "userId": "u_1005",
+      "status": "delivered",
+      "paidAt": "2026-03-05T16:05:49+08:00",
+      "totalAmount": 59.0,
+      "currency": "CNY",
+      "itemsSummary": "1件｜钢化膜"
+    },
+    {
+      "orderId": "o_2006",
+      "orderNo": "E202603120099",
+      "userId": "u_1001",
+      "status": "delivered",
+      "paidAt": "2026-03-12T11:06:00+08:00",
+      "totalAmount": 179.0,
+      "currency": "CNY",
+      "itemsSummary": "1件｜充电宝"
+    }
+  ],
+  "orderDetails": [
+    {
+      "orderId": "o_2001",
+      "orderNo": "E202603010001",
+      "userId": "u_1001",
+      "status": "shipped",
+      "paidAt": "2026-03-01T10:08:12+08:00",
+      "goodsAmount": 139.0,
+      "shippingFee": 10.0,
+      "discountAmount": 20.0,
+      "totalAmount": 129.0,
+      "currency": "CNY",
+      "receiver": {
+        "receiverNameMasked": "张*",
+        "receiverPhoneMasked": "188****1024",
+        "addressMasked": "广东省深圳市南山区***路***号"
+      },
+      "items": [
+        {"skuId": "sku_501", "title": "65W 氮化镓充电头", "qty": 1, "unitPrice": 99.0},
+        {"skuId": "sku_502", "title": "Type-C 数据线 1m", "qty": 1, "unitPrice": 40.0}
+      ],
+      "shipmentIds": ["s_3001"],
+      "aftersaleStatus": "none"
+    },
+    {
+      "orderId": "o_2002",
+      "orderNo": "E202603020016",
+      "userId": "u_1002",
+      "status": "delivered",
+      "paidAt": "2026-03-02T09:44:01+08:00",
+      "goodsAmount": 268.0,
+      "shippingFee": 0.0,
+      "discountAmount": 0.0,
+      "totalAmount": 268.0,
+      "currency": "CNY",
+      "receiver": {
+        "receiverNameMasked": "李**",
+        "receiverPhoneMasked": "177****7788",
+        "addressMasked": "上海市浦东新区***路***号"
+      },
+      "items": [
+        {"skuId": "sku_503", "title": "降噪蓝牙耳机", "qty": 1, "unitPrice": 268.0}
+      ],
+      "shipmentIds": ["s_3002"],
+      "aftersaleStatus": "none"
+    },
+    {
+      "orderId": "o_2003",
+      "orderNo": "E202603030105",
+      "userId": "u_1003",
+      "status": "paid",
+      "paidAt": "2026-03-03T21:12:33+08:00",
+      "goodsAmount": 89.0,
+      "shippingFee": 0.0,
+      "discountAmount": 0.0,
+      "totalAmount": 89.0,
+      "currency": "CNY",
+      "receiver": {
+        "receiverNameMasked": "王*",
+        "receiverPhoneMasked": "139****3344",
+        "addressMasked": "北京市朝阳区***街***号"
+      },
+      "items": [
+        {"skuId": "sku_504", "title": "防摔手机壳", "qty": 1, "unitPrice": 89.0}
+      ],
+      "shipmentIds": [],
+      "aftersaleStatus": "none"
+    },
+    {
+      "orderId": "o_2004",
+      "orderNo": "E202603040042",
+      "userId": "u_1004",
+      "status": "shipped",
+      "paidAt": "2026-03-04T12:20:18+08:00",
+      "goodsAmount": 399.0,
+      "shippingFee": 0.0,
+      "discountAmount": 0.0,
+      "totalAmount": 399.0,
+      "currency": "CNY",
+      "receiver": {
+        "receiverNameMasked": "赵**",
+        "receiverPhoneMasked": "166****8899",
+        "addressMasked": "浙江省杭州市西湖区***路***号"
+      },
+      "items": [
+        {"skuId": "sku_505", "title": "千兆无线路由器", "qty": 1, "unitPrice": 399.0}
+      ],
+      "shipmentIds": ["s_3003"],
+      "aftersaleStatus": "none"
+    },
+    {
+      "orderId": "o_2005",
+      "orderNo": "E202603050077",
+      "userId": "u_1005",
+      "status": "delivered",
+      "paidAt": "2026-03-05T16:05:49+08:00",
+      "goodsAmount": 69.0,
+      "shippingFee": 10.0,
+      "discountAmount": 20.0,
+      "totalAmount": 59.0,
+      "currency": "CNY",
+      "receiver": {
+        "receiverNameMasked": "陈*",
+        "receiverPhoneMasked": "155****5566",
+        "addressMasked": "江苏省南京市鼓楼区***路***号"
+      },
+      "items": [
+        {"skuId": "sku_506", "title": "高清钢化膜", "qty": 1, "unitPrice": 69.0}
+      ],
+      "shipmentIds": ["s_3004"],
+      "aftersaleStatus": "none"
+    },
+    {
+      "orderId": "o_2006",
+      "orderNo": "E202603120099",
+      "userId": "u_1001",
+      "status": "delivered",
+      "paidAt": "2026-03-12T11:06:00+08:00",
+      "goodsAmount": 199.0,
+      "shippingFee": 0.0,
+      "discountAmount": 20.0,
+      "totalAmount": 179.0,
+      "currency": "CNY",
+      "receiver": {
+        "receiverNameMasked": "张*",
+        "receiverPhoneMasked": "188****1024",
+        "addressMasked": "广东省深圳市南山区***路***号"
+      },
+      "items": [
+        {"skuId": "sku_507", "title": "20000mAh 快充充电宝", "qty": 1, "unitPrice": 199.0}
+      ],
+      "shipmentIds": ["s_3005"],
+      "aftersaleStatus": "none"
+    }
+  ],
+  "shipments": [
+    {
+      "shipmentId": "s_3001",
+      "carrier": "顺丰",
+      "trackingNoMasked": "SF****9012",
+      "status": "in_transit",
+      "shippedAt": "2026-03-01T15:20:00+08:00",
+      "deliveredAt": null,
+      "exceptionCode": null,
+      "events": [
+        {"time": "2026-03-01T15:20:00+08:00", "location": "深圳", "description": "已揽收", "code": null},
+        {"time": "2026-03-01T22:10:00+08:00", "location": "深圳转运中心", "description": "运输中", "code": null},
+        {"time": "2026-03-02T09:30:00+08:00", "location": "广州转运中心", "description": "到达转运中心", "code": null}
+      ]
+    },
+    {
+      "shipmentId": "s_3002",
+      "carrier": "中通",
+      "trackingNoMasked": "ZT****3341",
+      "status": "delivered",
+      "shippedAt": "2026-03-02T13:00:00+08:00",
+      "deliveredAt": "2026-03-03T17:40:00+08:00",
+      "exceptionCode": null,
+      "events": [
+        {"time": "2026-03-02T13:00:00+08:00", "location": "上海", "description": "已揽收", "code": null},
+        {"time": "2026-03-03T09:10:00+08:00", "location": "上海分拨", "description": "派送中", "code": null},
+        {"time": "2026-03-03T17:40:00+08:00", "location": "上海", "description": "已签收", "code": "DELIVERED"}
+      ]
+    },
+    {
+      "shipmentId": "s_3003",
+      "carrier": "圆通",
+      "trackingNoMasked": "YT****7711",
+      "status": "exception",
+      "shippedAt": "2026-03-04T18:05:00+08:00",
+      "deliveredAt": null,
+      "exceptionCode": "STUCK",
+      "events": [
+        {"time": "2026-03-04T18:05:00+08:00", "location": "杭州", "description": "已揽收", "code": null},
+        {"time": "2026-03-05T08:20:00+08:00", "location": "杭州转运中心", "description": "运输中", "code": null},
+        {"time": "2026-03-06T10:15:00+08:00", "location": "杭州转运中心", "description": "异常：滞留待处理", "code": "EXCEPTION"}
+      ]
+    },
+    {
+      "shipmentId": "s_3004",
+      "carrier": "京东物流",
+      "trackingNoMasked": "JD****2209",
+      "status": "delivered",
+      "shippedAt": "2026-03-05T19:00:00+08:00",
+      "deliveredAt": "2026-03-06T12:05:00+08:00",
+      "exceptionCode": null,
+      "events": [
+        {"time": "2026-03-05T19:00:00+08:00", "location": "南京", "description": "已揽收", "code": null},
+        {"time": "2026-03-06T09:30:00+08:00", "location": "南京", "description": "派送中", "code": null},
+        {"time": "2026-03-06T12:05:00+08:00", "location": "南京", "description": "已签收", "code": "DELIVERED"}
+      ]
+    },
+    {
+      "shipmentId": "s_3005",
+      "carrier": "顺丰",
+      "trackingNoMasked": "SF****4477",
+      "status": "delivered",
+      "shippedAt": "2026-03-12T15:10:00+08:00",
+      "deliveredAt": "2026-03-14T10:12:00+08:00",
+      "exceptionCode": null,
+      "events": [
+        {"time": "2026-03-12T15:10:00+08:00", "location": "深圳", "description": "已揽收", "code": null},
+        {"time": "2026-03-13T08:20:00+08:00", "location": "深圳转运中心", "description": "运输中", "code": null},
+        {"time": "2026-03-14T10:12:00+08:00", "location": "深圳", "description": "已签收", "code": "DELIVERED"}
+      ]
+    }
+  ],
+  "kbArticles": [
+    {
+      "articleId": "kb_7001",
+      "title": "7天无理由退货（支持条件与例外）",
+      "content": "自签收次日起7天内，商品不影响二次销售可申请无理由退货。以下情形不支持：定制类、已拆封影响二次销售、激活绑定类商品等。退货运费承担以商品页及活动规则为准。",
+      "tags": ["退货", "无理由", "时效"],
+      "updatedAt": "2026-02-20T10:00:00+08:00"
+    },
+    {
+      "articleId": "kb_7002",
+      "title": "物流异常处理SOP（滞留/丢失/退回）",
+      "content": "若物流状态异常或轨迹48小时无更新：1）核对地址信息与联系方式；2）创建催派工单并联系承运商；3）如判定丢失，按订单金额或规则发起补发/退款。",
+      "tags": ["物流", "SOP", "异常"],
+      "updatedAt": "2026-03-01T09:30:00+08:00"
+    },
+    {
+      "articleId": "kb_7003",
+      "title": "破损/少件处理SOP（需提供凭证）",
+      "content": "签收后发现破损或少件：请提供外包装面单、开箱视频/照片等凭证。确认责任后可选择补发、部分退款或补偿券。",
+      "tags": ["破损", "少件", "SOP"],
+      "updatedAt": "2026-03-10T14:10:00+08:00"
+    }
+  ],
+  "conversations": [
+    {
+      "conversationId": "c_9001",
+      "createdAt": "2026-03-07T10:22:00+08:00",
+      "status": "open",
+      "channel": "web",
+      "assigneeId": null,
+      "linkedUserId": "u_1001",
+      "linkedOrderId": "o_2001"
+    },
+    {
+      "conversationId": "c_9002",
+      "createdAt": "2026-03-08T14:05:00+08:00",
+      "status": "open",
+      "channel": "web",
+      "assigneeId": null,
+      "linkedUserId": "u_1004",
+      "linkedOrderId": "o_2004"
+    },
+    {
+      "conversationId": "c_9003",
+      "createdAt": "2026-03-14T11:00:00+08:00",
+      "status": "open",
+      "channel": "web",
+      "assigneeId": null,
+      "linkedUserId": "u_1001",
+      "linkedOrderId": "o_2006"
+    },
+    {
+      "conversationId": "c_9004",
+      "createdAt": "2026-03-10T16:18:00+08:00",
+      "status": "open",
+      "channel": "web",
+      "assigneeId": null,
+      "linkedUserId": "u_1002",
+      "linkedOrderId": "o_2002"
+    },
+    {
+      "conversationId": "c_9005",
+      "createdAt": "2026-03-09T09:40:00+08:00",
+      "status": "open",
+      "channel": "web",
+      "assigneeId": null,
+      "linkedUserId": "u_1003",
+      "linkedOrderId": "o_2003"
+    }
+  ],
+  "messages": [
+    {
+      "messageId": "m_9101",
+      "conversationId": "c_9001",
+      "role": "user",
+      "content": "我一直没收到货，帮我查下物流。",
+      "createdAt": "2026-03-07T10:22:10+08:00",
+      "citations": []
+    },
+    {
+      "messageId": "m_9102",
+      "conversationId": "c_9001",
+      "role": "agent",
+      "content": "好的，我先帮你定位订单并查询物流轨迹。请确认订单号或手机号后四位（例如 1024）。",
+      "createdAt": "2026-03-07T10:22:20+08:00",
+      "citations": []
+    },
+    {
+      "messageId": "m_9201",
+      "conversationId": "c_9002",
+      "role": "user",
+      "content": "物流显示异常滞留了，这种怎么处理？",
+      "createdAt": "2026-03-08T14:05:10+08:00",
+      "citations": []
+    },
+    {
+      "messageId": "m_9202",
+      "conversationId": "c_9002",
+      "role": "agent",
+      "content": "我先按SOP给你说明处理流程，并可继续帮你查询轨迹。",
+      "createdAt": "2026-03-08T14:05:20+08:00",
+      "citations": [
+        {"type": "kb", "ref": "kb_7002", "quote": "若物流状态异常或轨迹48小时无更新：核对信息→创建催派工单→必要时补发/退款。"}
+      ]
+    },
+    {
+      "messageId": "m_9301",
+      "conversationId": "c_9003",
+      "role": "user",
+      "content": "我想退货，怎么操作？",
+      "createdAt": "2026-03-14T11:00:10+08:00",
+      "citations": []
+    },
+    {
+      "messageId": "m_9302",
+      "conversationId": "c_9003",
+      "role": "agent",
+      "content": "好的，我先帮你确认是否在7天无理由退货窗口内，并引导你发起退货申请。",
+      "createdAt": "2026-03-14T11:00:20+08:00",
+      "citations": [{"type": "kb", "ref": "kb_7001", "quote": "自签收次日起7天内，商品不影响二次销售可申请无理由退货。"}]
+    },
+    {
+      "messageId": "m_9401",
+      "conversationId": "c_9004",
+      "role": "user",
+      "content": "7天无理由退货运费谁承担？",
+      "createdAt": "2026-03-10T16:18:10+08:00",
+      "citations": []
+    },
+    {
+      "messageId": "m_9402",
+      "conversationId": "c_9004",
+      "role": "agent",
+      "content": "我先帮你查一下对应政策条款，并说明运费规则。",
+      "createdAt": "2026-03-10T16:18:20+08:00",
+      "citations": [{"type": "kb", "ref": "kb_7001", "quote": "退货运费承担以商品页及活动规则为准。"}]
+    },
+    {
+      "messageId": "m_9501",
+      "conversationId": "c_9005",
+      "role": "user",
+      "content": "订单还没发货，我能改地址吗？",
+      "createdAt": "2026-03-09T09:40:10+08:00",
+      "citations": []
+    },
+    {
+      "messageId": "m_9502",
+      "conversationId": "c_9005",
+      "role": "agent",
+      "content": "里程碑1/2当前主要演示查物流、政策问答和退货申请。改地址属于敏感操作，后续里程碑3会加入二次确认与审批。",
+      "createdAt": "2026-03-09T09:40:20+08:00",
+      "citations": []
+    }
+  ],
+  "toolCalls": [
+    {
+      "toolCallId": "tc_001",
+      "traceId": "t_0001",
+      "conversationId": "c_9001",
+      "stepId": "step_01",
+      "toolName": "searchOrders",
+      "inputRedacted": {"phoneLast4": "1024"},
+      "outputRedacted": {"orders": [{"orderId": "o_2001", "orderNo": "E202603010001", "status": "shipped"}]},
+      "status": "success",
+      "latencyMs": 42,
+      "error": null,
+      "createdAt": "2026-03-07T10:22:35+08:00"
+    },
+    {
+      "toolCallId": "tc_002",
+      "traceId": "t_0001",
+      "conversationId": "c_9001",
+      "stepId": "step_02",
+      "toolName": "getOrderDetail",
+      "inputRedacted": {"orderId": "o_2001"},
+      "outputRedacted": {"orderId": "o_2001", "shipmentIds": ["s_3001"]},
+      "status": "success",
+      "latencyMs": 35,
+      "error": null,
+      "createdAt": "2026-03-07T10:22:36+08:00"
+    },
+    {
+      "toolCallId": "tc_003",
+      "traceId": "t_0001",
+      "conversationId": "c_9001",
+      "stepId": "step_03",
+      "toolName": "getShipmentTracking",
+      "inputRedacted": {"shipmentId": "s_3001"},
+      "outputRedacted": {"shipmentId": "s_3001", "status": "in_transit", "lastEvent": "到达转运中心"},
+      "status": "success",
+      "latencyMs": 58,
+      "error": null,
+      "createdAt": "2026-03-07T10:22:36+08:00"
+    }
+  ],
+  "indexes": {
+    "ordersByOrderNo": {
+      "E202603010001": "o_2001",
+      "E202603020016": "o_2002",
+      "E202603030105": "o_2003",
+      "E202603040042": "o_2004",
+      "E202603050077": "o_2005",
+      "E202603120099": "o_2006"
+    },
+    "usersByPhoneLast4": {
+      "1024": ["u_1001"],
+      "7788": ["u_1002"],
+      "3344": ["u_1003"],
+      "8899": ["u_1004"],
+      "5566": ["u_1005"]
+    },
+    "ordersByUserId": {
+      "u_1001": ["o_2001", "o_2006"],
+      "u_1002": ["o_2002"],
+      "u_1003": ["o_2003"],
+      "u_1004": ["o_2004"],
+      "u_1005": ["o_2005"]
+    }
+  }
+}
