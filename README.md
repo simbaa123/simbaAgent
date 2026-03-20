@@ -16,7 +16,7 @@
 
 ## 技术栈
 
-- 前端：React + React Router + TypeScript + Vite
+- 前端：React + React Router + TypeScript + Vite + Tailwind CSS
 - 后端：Node.js + Express 5 + TypeScript（tsx）
 - Agent：LangChain（支持 DeepSeek/OpenAI 兼容接口）+ Zod 参数校验
 - 实时通信：SSE（Server-Sent Events）
