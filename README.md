@@ -1,6 +1,6 @@
 # simbaAgent
 
-一个可演示的电商售后智能客服工作台：前端提供 Inbox/Console，后端以 SSE 流式推送 Agent 规划、工具调用日志与增量回复，并支持通过 MCP 扩展外部能力（文件导出、SQLite 审计查询）。
+一个可演示的电商售后智能客服工作台：前端使用 Vue 3（JavaScript + Vite + Tailwind）提供 Inbox/Console，后端以 SSE 流式推送 Agent 规划、工具调用日志与增量回复，并支持通过 MCP 扩展外部能力（文件导出、SQLite 审计查询）。
 
 ## 功能
 
@@ -8,16 +8,19 @@
 - SSE 流式输出：token 级增量回复 + `plan_update/tool_call/tool_result` 可观测事件
 - 订单上下文：订单侧栏展示（收货信息脱敏、金额、包裹列表）
 - 物流查询：按订单关联包裹展示物流轨迹时间线
-- 政策/知识库问答：基于 KB 的检索与引用片段（演示数据）
+- 政策/知识库问答（RAG 演示）：`kbSearch` 检索 KB，命中结果以引用卡片展示（含条款引用与片段）
 - 退货闭环：可退判断 → `need_confirm` 二次确认弹窗 → 创建退货申请（演示数据）
 - MCP 扩展：
   - 导出会话：一键把当前会话导出到 `exports/*.md|json`
   - 审计查询：把请求写入本地 SQLite，并在 Console 里表格展示最近审计记录
 
+相关说明文档：
+- docs/agent-langchain-flow.md（Agent + LangChain + Tools/MCP + RAG 引用卡片）
+
 ## 技术栈
 
-- 前端：React + React Router + TypeScript + Vite + Tailwind CSS
-- 后端：Node.js + Express 5 + TypeScript（tsx）
+- 前端：Vue 3 + Vue Router + JavaScript + Vite + Tailwind CSS
+- 后端：Node.js + Express 5（tsx 运行 TypeScript）
 - Agent：LangChain（支持 DeepSeek/OpenAI 兼容接口）+ Zod 参数校验
 - 实时通信：SSE（Server-Sent Events）
 - MCP：
@@ -80,3 +83,7 @@ NODE_ENV=production SERVE_STATIC=1 npm start
 - `OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL`：可选 OpenAI 配置（备用）
 - `USE_MCP=1`：启用 MCP 扩展能力（导出会话、SQLite 审计）
 - `MCP_SQLITE_URL`：SQLite 文件路径（默认 `sqlite://./data/agent.sqlite`）
+
+## 常见问题
+
+- 如果看到 Vite 提示 `http proxy error: /api/*` 或 `ECONNREFUSED 127.0.0.1:8787`：表示后端尚未启动完成。等待后端打印 `[server] http://localhost:8787`，或先单独运行 `npm run dev:server` 再运行 `npm run dev:web`。
