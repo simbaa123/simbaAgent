@@ -4,7 +4,9 @@ export function parseSseTextChunk(buffer) {
   const rest = parts.at(-1) ?? "";
 
   const events = [];
+  // 解析每个完整的事件块
   for (const raw of complete) {
+    // 解析每一行
     const lines = raw.split("\n").filter(Boolean);
     let eventName = null;
     const dataLines = [];

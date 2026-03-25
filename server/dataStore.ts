@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 const SampleDataSchema = z.object({
@@ -47,19 +48,36 @@ type SampleData = z.infer<typeof SampleDataSchema> & {
   toolCalls: any[];
 };
 
-let cached: { data: SampleData; loadedAtMs: number } | null = null;
+let cached: { data: SampleData } | null = null;
 
 function dataPath() {
-  return path.resolve(process.cwd(), "data", "milestone1", "sample-data.json");
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const repoRoot = path.resolve(here, "..");
+  return path.resolve(repoRoot, "data", "milestone1", "sample-data.json");
 }
 
 export async function loadSampleData(): Promise<SampleData> {
-  if (cached && Date.now() - cached.loadedAtMs < 3_000) return cached.data;
+  if (cached) return cached.data;
   const raw = await readFile(dataPath(), "utf-8");
   const json = JSON.parse(raw);
+  // 清空示例对话，让会话默认从空白开始
+  json.messages = [];
   const data = SampleDataSchema.parse(json) as SampleData;
-  cached = { data, loadedAtMs: Date.now() };
+  cached = { data };
   return data;
+}
+
+export function appendMessage(conversationId: string, role: "user" | "agent", content: string) {
+  if (cached) {
+    cached.data.messages.push({
+      messageId: `m_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      conversationId,
+      role,
+      content,
+      createdAt: new Date().toISOString(),
+      citations: []
+    });
+  }
 }
 
 export function snippetFromContent(content: string, maxLen = 140) {
@@ -67,4 +85,3 @@ export function snippetFromContent(content: string, maxLen = 140) {
   if (normalized.length <= maxLen) return normalized;
   return normalized.slice(0, maxLen) + "…";
 }
-

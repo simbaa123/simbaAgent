@@ -98,11 +98,13 @@ const exportReady = ref(null);
 const sqliteResult = ref(null);
 
 const linkedShipmentIds = computed(() => order.value?.shipmentIds ?? []);
-
+// 加载对话 并更新状态
 async function loadConversation() {
+
   const id = convId.value;
   if (!id) return;
   try {
+
     const res = await getConversation(id);
     messages.value = res.messages ?? [];
     order.value = res.orderDetail ?? null;
@@ -118,7 +120,7 @@ async function loadConversation() {
 
 onMounted(() => void loadConversation());
 watch(convId, () => void loadConversation());
-
+// 发送消息 并更新状态
 async function send(params) {
   const id = convId.value;
   if (!id) return;
@@ -139,7 +141,7 @@ async function send(params) {
   messages.value = [...messages.value, { messageId: assistantMsgId, conversationId: id, role: "agent", content: "", createdAt: new Date().toISOString(), citations: [] }];
 
   let assistantDraft = "";
-
+  
   const res = await fetch("/api/chat/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -228,11 +230,20 @@ function onCancelConfirm() {
 }
 
 function onConfirmAction() {
+  const action = pendingConfirm.value?.action;
   const details = pendingConfirm.value?.details ?? {};
-  const orderId = details.orderId;
-  const reason = details.reason;
   pendingConfirm.value = null;
   pushSystemMessage("已确认执行");
-  void send({ text: "确认", context: { orderId, confirm: { action: "create_return_request", payload: { orderId, reason } } }, silentUserMessage: true });
+  void send({
+    text: "确认",
+    context: {
+      orderId: details.orderId,
+      confirm: {
+        action: action,
+        payload: details
+      }
+    },
+    silentUserMessage: true
+  });
 }
 </script>

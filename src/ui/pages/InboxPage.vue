@@ -25,8 +25,14 @@
         </div>
       </div>
 
-      <div v-if="error" class="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-        {{ error }}
+      <div v-if="error" class="mt-4 flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div class="min-w-0 flex-1">{{ error }}</div>
+        <button
+          class="shrink-0 rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+          @click="load"
+        >
+          重试
+        </button>
       </div>
 
       <div class="mt-6 grid gap-3">
@@ -86,7 +92,7 @@ const error = ref(null);
 const loading = ref(true);
 const q = ref("");
 
-onMounted(async () => {
+async function load() {
   loading.value = true;
   try {
     const data = await listConversations();
@@ -97,7 +103,9 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
-});
+}
+
+onMounted(load);
 
 const filtered = computed(() => {
   const t = q.value.trim().toLowerCase();

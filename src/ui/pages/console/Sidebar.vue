@@ -276,7 +276,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["export", "audit", "clearExport", "clearSqlite", "clearHits"]);
-
+// 定义状态 pill 类名 
 function statusPill(status) {
   const s = status.toLowerCase();
   if (s.includes("exception") || s.includes("fail")) return "bg-red-50 text-red-700";
@@ -285,10 +285,10 @@ function statusPill(status) {
     return "bg-emerald-50 text-emerald-700";
   return "bg-zinc-100 text-zinc-700";
 }
-
+// 复制文本
 async function copy(text) {
   await navigator.clipboard.writeText(text);
 }
-
+// 定义 sqlite 列名
 const sqliteColumns = computed(() => Object.keys(props.sqliteResult?.rows?.[0] ?? {}).slice(0, 10));
 </script>

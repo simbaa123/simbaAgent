@@ -37,7 +37,7 @@
 
 <script setup>
 import { nextTick, onMounted, ref, watch } from "vue";
-
+// 定义属性
 const props = defineProps({
   messages: { type: Array, default: () => [] },
   error: { type: String, default: null },
