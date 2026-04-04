@@ -45,6 +45,8 @@
         :sqliteResult="sqliteResult"
         @export="onExport"
         @audit="onAudit"
+        @reply="onReply"
+        @diagnose="onDiagnose"
         @clearHits="kbHits = []"
         @clearExport="exportReady = null"
         @clearSqlite="sqliteResult = null"
@@ -153,12 +155,13 @@ async function send(params) {
     error.value = "Stream failed to start";
     return;
   }
-
+  // 读取响应流
   const reader = res.body.getReader();
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
 
   while (true) {
+    // 读取流数据
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
@@ -216,6 +219,16 @@ function onExport() {
 function onAudit() {
   pushSystemMessage("（系统）查看最近审计");
   void send({ text: "/audit", silentUserMessage: true });
+}
+
+function onReply() {
+  pushSystemMessage("（系统）生成客服回复");
+  void send({ text: "/reply", silentUserMessage: true });
+}
+
+function onDiagnose() {
+  pushSystemMessage("（系统）物流异常诊断 + SOP 下一步");
+  void send({ text: "/diagnose", silentUserMessage: true });
 }
 
 function onChooseOrder(params) {

@@ -163,6 +163,26 @@
         </div>
       </section>
 
+      <section>
+        <div class="mb-2 text-xs font-semibold text-zinc-600">AI 快捷操作</div>
+        <div class="flex flex-wrap gap-2">
+          <button
+            class="rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 shadow-sm hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="streaming"
+            @click="emit('reply')"
+          >
+            生成客服回复
+          </button>
+          <button
+            class="rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 shadow-sm hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="streaming"
+            @click="emit('diagnose')"
+          >
+            异常诊断+SOP
+          </button>
+        </div>
+      </section>
+
       <section v-if="kbHits.length">
         <div class="mb-2 flex items-center justify-between gap-3">
           <div class="text-xs font-semibold text-zinc-600">引用（KB 命中）</div>
@@ -275,7 +295,7 @@ const props = defineProps({
   sqliteResult: { type: Object, default: null }
 });
 
-const emit = defineEmits(["export", "audit", "clearExport", "clearSqlite", "clearHits"]);
+const emit = defineEmits(["export", "audit", "reply", "diagnose", "clearExport", "clearSqlite", "clearHits"]);
 // 定义状态 pill 类名 
 function statusPill(status) {
   const s = status.toLowerCase();

@@ -327,10 +327,72 @@ function calcReturnEligibility(params: {
   };
 }
 
-function createToolEmitters(res: Response) {
-  return {
-    emitToolCall: (payload: any) => sendSseEvent(res, "tool_call", payload),
-    emitToolResult: (payload: any) => sendSseEvent(res, "tool_result", payload)
+/**
+ * 工具辅助函数：封装通用的工具调用包装器，自动处理 tool_call / tool_result 事件
+ */
+function createToolWrapper(res: Response, traceId: string, conversationId: string, markToolUsed: () => void) {
+  return function wrapTool<T, R>(
+    stepId: string,
+    toolName: string,
+    description: string,
+    schema: z.ZodType<T>,
+    fn: (input: T) => Promise<{ output: R; error?: any; status?: "success" | "fail" }>
+  ) {
+    return tool(
+      async (input: T) => {
+        const started = Date.now();
+        const toolCallId = `tc_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        markToolUsed();
+        sendSseEvent(res, "tool_call", {
+          toolCallId,
+          traceId,
+          conversationId,
+          stepId,
+          toolName,
+          inputRedacted: input,
+          outputRedacted: {},
+          status: "success",
+          latencyMs: 0,
+          error: null,
+          createdAt: new Date().toISOString()
+        });
+
+        try {
+          const { output, error, status } = await fn(input);
+          const isSuccess = status ? status === "success" : !error;
+          sendSseEvent(res, "tool_result", {
+            toolCallId: `${toolCallId}_r`,
+            traceId,
+            conversationId,
+            stepId,
+            toolName,
+            inputRedacted: input,
+            outputRedacted: output,
+            status: isSuccess ? "success" : "fail",
+            latencyMs: Date.now() - started,
+            error: error || null,
+            createdAt: new Date().toISOString()
+          });
+          return output;
+        } catch (e: any) {
+          sendSseEvent(res, "tool_result", {
+            toolCallId: `${toolCallId}_r`,
+            traceId,
+            conversationId,
+            stepId,
+            toolName,
+            inputRedacted: input,
+            outputRedacted: {},
+            status: "fail",
+            latencyMs: Date.now() - started,
+            error: { message: e.message || "Unknown error" },
+            createdAt: new Date().toISOString()
+          });
+          return { error: e.message };
+        }
+      },
+      { name: toolName, description, schema }
+    );
   };
 }
 
@@ -360,7 +422,7 @@ function createAgentTools(params: {
   isMcpEnabled: boolean;
 }) {
   const { res, traceId, conversationId, userMessage, data, markToolUsed, isMcpEnabled } = params;
-  const { emitToolCall, emitToolResult } = createToolEmitters(res);
+  const wrap = createToolWrapper(res, traceId, conversationId, markToolUsed);
 
   const sqliteUrl = env("MCP_SQLITE_URL") || "sqlite://./data/agent.sqlite";
   let sqliteSchemaReady = false;
@@ -372,578 +434,177 @@ function createAgentTools(params: {
       name: "sqlite_ddl",
       arguments: {
         query:
-          "CREATE TABLE IF NOT EXISTS audit_requests (" +
-          "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-          "created_at TEXT NOT NULL," +
-          "conversation_id TEXT NOT NULL," +
-          "trace_id TEXT NOT NULL," +
-          "user_message TEXT NOT NULL" +
-          ");",
+          "CREATE TABLE IF NOT EXISTS audit_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, conversation_id TEXT NOT NULL, trace_id TEXT NOT NULL, user_message TEXT NOT NULL);",
         parameters: []
       }
     });
     sqliteSchemaReady = true;
   }
 
-  const exportConversationToFile =
-    isMcpEnabled
-      ? tool(
-          async ({ format }: { format?: "md" | "json" }) => {
-            const started = Date.now();
-            const toolCallId = `tc_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-            markToolUsed();
-            emitToolCall({
-              toolCallId,
-              traceId,
-              conversationId,
-              stepId: "step_02",
-              toolName: "exportConversationToFile",
-              inputRedacted: { format: format ?? "md" },
-              outputRedacted: {},
-              status: "success",
-              latencyMs: 0,
-              error: null,
-              createdAt: new Date().toISOString()
-            });
+  const exportConversationToFile = isMcpEnabled
+    ? wrap(
+        "step_02",
+        "exportConversationToFile",
+        "将当前会话导出为 markdown/json 文件并返回文件路径",
+        z.object({ format: z.enum(["md", "json"]).optional() }),
+        async ({ format }) => {
+          const fsClient = await getFilesystemMcpClient({ allowedDirs: [path.resolve(process.cwd(), "exports")] });
+          const exportsDir = path.resolve(process.cwd(), "exports");
+          await fsClient.callTool({ name: "create_directory", arguments: { path: exportsDir } });
 
-            const fsClient = await getFilesystemMcpClient({
-              allowedDirs: [path.resolve(process.cwd(), "exports")]
-            });
-            const exportsDir = path.resolve(process.cwd(), "exports");
-            await fsClient.callTool({ name: "create_directory", arguments: { path: exportsDir } });
+          const msgs = data.messages
+            .filter((m: any) => m.conversationId === conversationId)
+            .map((m: any) => `- [${m.createdAt}] ${m.role}: ${m.content}`)
+            .join("\n");
 
-            const msgs = data.messages
-              .filter((m: any) => m.conversationId === conversationId)
-              .map((m: any) => `- [${m.createdAt}] ${m.role}: ${m.content}`)
-              .join("\n");
+          const ext = (format ?? "md") === "json" ? "json" : "md";
+          const content = ext === "json" 
+            ? JSON.stringify({ conversationId, traceId, messages: data.messages.filter((m: any) => m.conversationId === conversationId) }, null, 2)
+            : `# Conversation ${conversationId}\n\ntraceId: ${traceId}\n\n${msgs}\n`;
+          
+          const outPath = path.resolve(exportsDir, `${conversationId}_${Date.now()}.${ext}`);
+          await fsClient.callTool({ name: "write_file", arguments: { path: outPath, content } });
+          return { output: { ok: true, path: outPath } };
+        }
+      )
+    : null;
 
-            const content =
-              (format ?? "md") === "json"
-                ? JSON.stringify(
-                    { conversationId, traceId, messages: data.messages.filter((m: any) => m.conversationId === conversationId) },
-                    null,
-                    2
-                  )
-                : `# Conversation ${conversationId}\n\ntraceId: ${traceId}\n\n${msgs}\n`;
+  const sqliteQuery = isMcpEnabled
+    ? wrap(
+        "step_02",
+        "sqliteQuery",
+        "通过 MCP sqlite 执行 SELECT 查询（同时会写入一条 audit_requests 审计记录）",
+        z.object({ query: z.string().min(1), parameters: z.array(z.any()).optional() }),
+        async ({ query, parameters }) => {
+          if (!/^\s*select\b/i.test(query)) throw new Error("sqliteQuery 仅支持 SELECT 查询");
+          await ensureSqliteSchema();
+          const client = await getSqliteMcpClient({ url: sqliteUrl });
+          await client.callTool({
+            name: "sqlite_insert",
+            arguments: {
+              query: "INSERT INTO audit_requests (created_at, conversation_id, trace_id, user_message) VALUES (?, ?, ?, ?)",
+              parameters: [new Date().toISOString(), conversationId, traceId, userMessage]
+            }
+          });
+          const result = await client.callTool({
+            name: "sqlite_query",
+            arguments: { query, parameters: Array.isArray(parameters) ? parameters : [] }
+          });
+          return { output: { result, ok: true } };
+        }
+      )
+    : null;
 
-            const ext = (format ?? "md") === "json" ? "json" : "md";
-            const outPath = path.resolve(exportsDir, `${conversationId}_${Date.now()}.${ext}`);
-            await fsClient.callTool({ name: "write_file", arguments: { path: outPath, content } });
-
-            const output = { ok: true, path: outPath };
-            emitToolResult({
-              toolCallId: `${toolCallId}_r`,
-              traceId,
-              conversationId,
-              stepId: "step_02",
-              toolName: "exportConversationToFile",
-              inputRedacted: { format: format ?? "md" },
-              outputRedacted: output,
-              status: "success",
-              latencyMs: Date.now() - started,
-              error: null,
-              createdAt: new Date().toISOString()
-            });
-            return output;
-          },
-          {
-            name: "exportConversationToFile",
-            description: "将当前会话导出为 markdown/json 文件并返回文件路径（通过 MCP filesystem 写入 exports 目录）",
-            schema: z.object({
-              format: z.enum(["md", "json"]).optional()
-            })
-          }
-        )
-      : null;
-
-  const sqliteQuery =
-    isMcpEnabled
-      ? tool(
-          async ({ query, parameters }: { query: string; parameters?: unknown[] }) => {
-            if (!/^\s*select\b/i.test(query)) throw new Error("sqliteQuery 仅支持 SELECT 查询");
-            const started = Date.now();
-            const toolCallId = `tc_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-            markToolUsed();
-            emitToolCall({
-              toolCallId,
-              traceId,
-              conversationId,
-              stepId: "step_02",
-              toolName: "sqliteQuery",
-              inputRedacted: { query, parameters: Array.isArray(parameters) ? parameters : [] },
-              outputRedacted: {},
-              status: "success",
-              latencyMs: 0,
-              error: null,
-              createdAt: new Date().toISOString()
-            });
-
-            await ensureSqliteSchema();
-            const client = await getSqliteMcpClient({ url: sqliteUrl });
-
-            await client.callTool({
-              name: "sqlite_insert",
-              arguments: {
-                query: "INSERT INTO audit_requests (created_at, conversation_id, trace_id, user_message) VALUES (?, ?, ?, ?)",
-                parameters: [new Date().toISOString(), conversationId, traceId, userMessage]
-              }
-            });
-
-            const result = await client.callTool({
-              name: "sqlite_query",
-              arguments: { query, parameters: Array.isArray(parameters) ? parameters : [] }
-            });
-
-            const output = { result };
-            emitToolResult({
-              toolCallId: `${toolCallId}_r`,
-              traceId,
-              conversationId,
-              stepId: "step_02",
-              toolName: "sqliteQuery",
-              inputRedacted: { query, parameters: Array.isArray(parameters) ? parameters : [] },
-              outputRedacted: { ok: true },
-              status: "success",
-              latencyMs: Date.now() - started,
-              error: null,
-              createdAt: new Date().toISOString()
-            });
-            return output;
-          },
-          {
-            name: "sqliteQuery",
-            description: "通过 MCP sqlite 执行 SELECT 查询（同时会写入一条 audit_requests 审计记录）",
-            schema: z.object({
-              query: z.string().min(1),
-              parameters: z.array(z.any()).optional()
-            })
-          }
-        )
-      : null;
-
-  const searchOrders = tool(
-    async ({ orderNo, phoneLast4 }: { orderNo?: string; phoneLast4?: string }) => {
-      const started = Date.now();
-      const toolCallId = `tc_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      markToolUsed();
-      emitToolCall({
-        toolCallId,
-        traceId,
-        conversationId,
-        stepId: "step_02",
-        toolName: "searchOrders",
-        inputRedacted: { orderNo: orderNo ?? undefined, phoneLast4: phoneLast4 ?? undefined },
-        outputRedacted: {},
-        status: "success",
-        latencyMs: 0,
-        error: null,
-        createdAt: new Date().toISOString()
-      });
-
+  const searchOrders = wrap(
+    "step_02",
+    "searchOrders",
+    "根据订单号或手机号后四位检索订单列表",
+    z.object({ orderNo: z.string().optional(), phoneLast4: z.string().length(4).optional() }),
+    async ({ orderNo, phoneLast4 }) => {
       const orderIds = new Set<string>();
-      if (orderNo) {
-        const orderId = data.indexes.ordersByOrderNo[orderNo];
-        if (orderId) orderIds.add(orderId);
-      }
+      if (orderNo && data.indexes.ordersByOrderNo[orderNo]) orderIds.add(data.indexes.ordersByOrderNo[orderNo]);
       if (phoneLast4) {
-        const userIds = data.indexes.usersByPhoneLast4[phoneLast4] ?? [];
-        for (const uid of userIds) {
-          const oids = data.indexes.ordersByUserId[uid] ?? [];
-          for (const oid of oids) orderIds.add(oid);
+        for (const uid of (data.indexes.usersByPhoneLast4[phoneLast4] ?? [])) {
+          for (const oid of (data.indexes.ordersByUserId[uid] ?? [])) orderIds.add(oid);
         }
       }
-
-      const orders = data.orders.filter((o: any) => orderIds.has(o.orderId));
-      const output = { orders };
-
-      emitToolResult({
-        toolCallId: `${toolCallId}_r`,
-        traceId,
-        conversationId,
-        stepId: "step_02",
-        toolName: "searchOrders",
-        inputRedacted: { orderNo: orderNo ?? undefined, phoneLast4: phoneLast4 ?? undefined },
-        outputRedacted: output,
-        status: "success",
-        latencyMs: Date.now() - started,
-        error: null,
-        createdAt: new Date().toISOString()
-      });
-
-      return output;
-    },
-    {
-      name: "searchOrders",
-      description: "根据订单号或手机号后四位检索订单列表（脱敏数据）",
-      schema: z.object({
-        orderNo: z.string().optional(),
-        phoneLast4: z.string().length(4).optional()
-      })
+      return { output: { orders: data.orders.filter((o: any) => orderIds.has(o.orderId)) } };
     }
   );
 
-  const getOrderDetail = tool(
-    async ({ orderId }: { orderId: string }) => {
-      const started = Date.now();
-      const toolCallId = `tc_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      markToolUsed();
-      emitToolCall({
-        toolCallId,
-        traceId,
-        conversationId,
-        stepId: "step_02",
-        toolName: "getOrderDetail",
-        inputRedacted: { orderId },
-        outputRedacted: {},
-        status: "success",
-        latencyMs: 0,
-        error: null,
-        createdAt: new Date().toISOString()
-      });
-
+  const getOrderDetail = wrap(
+    "step_02",
+    "getOrderDetail",
+    "根据 orderId 获取订单详情",
+    z.object({ orderId: z.string() }),
+    async ({ orderId }) => {
       const orderDetail = data.orderDetails.find((o: any) => o.orderId === orderId) ?? null;
-      const output = { orderDetail };
-
-      emitToolResult({
-        toolCallId: `${toolCallId}_r`,
-        traceId,
-        conversationId,
-        stepId: "step_02",
-        toolName: "getOrderDetail",
-        inputRedacted: { orderId },
-        outputRedacted: output,
+      return { 
+        output: { orderDetail }, 
         status: orderDetail ? "success" : "fail",
-        latencyMs: Date.now() - started,
-        error: orderDetail ? null : { code: "ORDER_NOT_FOUND", message: "Order not found" },
-        createdAt: new Date().toISOString()
-      });
-
-      return output;
-    },
-    {
-      name: "getOrderDetail",
-      description: "根据 orderId 获取订单详情（包含包裹ID、收货信息脱敏、金额、商品）",
-      schema: z.object({
-        orderId: z.string()
-      })
+        error: orderDetail ? null : { code: "ORDER_NOT_FOUND", message: "Order not found" }
+      };
     }
   );
 
-  const getShipmentTracking = tool(
-    async ({ shipmentId }: { shipmentId: string }) => {
-      const started = Date.now();
-      const toolCallId = `tc_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      markToolUsed();
-      emitToolCall({
-        toolCallId,
-        traceId,
-        conversationId,
-        stepId: "step_02",
-        toolName: "getShipmentTracking",
-        inputRedacted: { shipmentId },
-        outputRedacted: {},
-        status: "success",
-        latencyMs: 0,
-        error: null,
-        createdAt: new Date().toISOString()
-      });
-
+  const getShipmentTracking = wrap(
+    "step_02",
+    "getShipmentTracking",
+    "根据 shipmentId 获取物流轨迹",
+    z.object({ shipmentId: z.string() }),
+    async ({ shipmentId }) => {
       const shipment = data.shipments.find((s: any) => s.shipmentId === shipmentId) ?? null;
-      const output = { shipment };
-
-      emitToolResult({
-        toolCallId: `${toolCallId}_r`,
-        traceId,
-        conversationId,
-        stepId: "step_02",
-        toolName: "getShipmentTracking",
-        inputRedacted: { shipmentId },
-        outputRedacted: output,
+      return {
+        output: { shipment },
         status: shipment ? "success" : "fail",
-        latencyMs: Date.now() - started,
-        error: shipment ? null : { code: "SHIPMENT_NOT_FOUND", message: "Shipment not found" },
-        createdAt: new Date().toISOString()
-      });
-
-      return output;
-    },
-    {
-      name: "getShipmentTracking",
-      description: "根据 shipmentId 获取物流轨迹",
-      schema: z.object({
-        shipmentId: z.string()
-      })
+        error: shipment ? null : { code: "SHIPMENT_NOT_FOUND", message: "Shipment not found" }
+      };
     }
   );
 
-  const kbSearch = tool(
-    async ({ q }: { q: string }) => {
-      const started = Date.now();
-      const toolCallId = `tc_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      markToolUsed();
-      emitToolCall({
-        toolCallId,
-        traceId,
-        conversationId,
-        stepId: "step_02",
-        toolName: "kbSearch",
-        inputRedacted: { q },
-        outputRedacted: {},
-        status: "success",
-        latencyMs: 0,
-        error: null,
-        createdAt: new Date().toISOString()
-      });
-
+  const kbSearch = wrap(
+    "step_02",
+    "kbSearch",
+    "在政策知识库中检索",
+    z.object({ q: z.string().min(1) }),
+    async ({ q }) => {
       const qLower = q.toLowerCase();
       const hits = data.kbArticles
-        .filter((a: any) => {
-          const title = String(a.title ?? "").toLowerCase();
-          const content = String(a.content ?? "").toLowerCase();
-          const tags = Array.isArray(a.tags) ? a.tags.join(" ").toLowerCase() : "";
-          return title.includes(qLower) || content.includes(qLower) || tags.includes(qLower);
-        })
+        .filter((a: any) => `${a.title} ${a.content} ${(a.tags||[]).join(" ")}`.toLowerCase().includes(qLower))
         .slice(0, 5)
         .map((a: any) => ({
-          articleId: a.articleId,
-          title: a.title,
-          snippet: snippetFromContent(String(a.content ?? "")),
-          tags: a.tags ?? [],
-          updatedAt: a.updatedAt
+          articleId: a.articleId, title: a.title, snippet: snippetFromContent(String(a.content ?? "")), tags: a.tags ?? []
         }));
-
-      const output = { hits };
-
-      emitToolResult({
-        toolCallId: `${toolCallId}_r`,
-        traceId,
-        conversationId,
-        stepId: "step_02",
-        toolName: "kbSearch",
-        inputRedacted: { q },
-        outputRedacted: output,
-        status: "success",
-        latencyMs: Date.now() - started,
-        error: null,
-        createdAt: new Date().toISOString()
-      });
-
-      return output;
-    },
-    {
-      name: "kbSearch",
-      description: "在政策/SOP 知识库中检索相关条款，返回命中列表（包含 articleId 作为引用）",
-      schema: z.object({
-        q: z.string().min(1)
-      })
+      return { output: { hits } };
     }
   );
 
-  const getReturnEligibility = tool(
-    async ({ orderId, reasonType }: { orderId: string; reasonType?: "no_reason" | "quality" }) => {
-      const started = Date.now();
-      const toolCallId = `tc_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      markToolUsed();
-      emitToolCall({
-        toolCallId,
-        traceId,
-        conversationId,
-        stepId: "step_02",
-        toolName: "getReturnEligibility",
-        inputRedacted: { orderId, reasonType: reasonType ?? "no_reason" },
-        outputRedacted: {},
-        status: "success",
-        latencyMs: 0,
-        error: null,
-        createdAt: new Date().toISOString()
-      });
-
+  const getReturnEligibility = wrap(
+    "step_02",
+    "getReturnEligibility",
+    "判断订单是否可退",
+    z.object({ orderId: z.string(), reasonType: z.enum(["no_reason", "quality"]).optional() }),
+    async ({ orderId, reasonType }) => {
       const orderDetail = data.orderDetails.find((o: any) => o.orderId === orderId) ?? null;
-      const shipments = orderDetail?.shipmentIds
-        ? data.shipments.filter((s: any) => orderDetail.shipmentIds.includes(s.shipmentId))
-        : [];
-      const rt = reasonType ?? "no_reason";
+      const shipments = orderDetail?.shipmentIds ? data.shipments.filter((s: any) => orderDetail.shipmentIds.includes(s.shipmentId)) : [];
       const eligibility = orderDetail
-        ? calcReturnEligibility({ nowIso: new Date().toISOString(), orderDetail, shipments, reasonType: rt })
+        ? calcReturnEligibility({ nowIso: new Date().toISOString(), orderDetail, shipments, reasonType: reasonType ?? "no_reason" })
         : { eligible: false, windowDaysLeft: 0, feeRule: "buyer", requiredProof: [], reason: "未找到订单。" };
-
-      const output = { eligibility };
-
-      emitToolResult({
-        toolCallId: `${toolCallId}_r`,
-        traceId,
-        conversationId,
-        stepId: "step_02",
-        toolName: "getReturnEligibility",
-        inputRedacted: { orderId, reasonType: reasonType ?? "no_reason" },
-        outputRedacted: output,
-        status: "success",
-        latencyMs: Date.now() - started,
-        error: null,
-        createdAt: new Date().toISOString()
-      });
-
-      return output as { eligibility: ReturnEligibility };
-    },
-    {
-      name: "getReturnEligibility",
-      description: "判断订单是否可退（7天无理由/质量问题），并返回原因、剩余天数、运费规则与所需凭证",
-      schema: z.object({
-        orderId: z.string(),
-        reasonType: z.enum(["no_reason", "quality"]).optional()
-      })
+      return { output: { eligibility } };
     }
   );
 
-  const createReturnRequest = tool(
-    async ({ orderId, reason }: { orderId: string; reason: string }) => {
-      const started = Date.now();
-      const toolCallId = `tc_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-      markToolUsed();
-      emitToolCall({
-        toolCallId,
-        traceId,
-        conversationId,
-        stepId: "step_03",
-        toolName: "createReturnRequest",
-        inputRedacted: { orderId, reason },
-        outputRedacted: {},
-        status: "success",
-        latencyMs: 0,
-        error: null,
-        createdAt: new Date().toISOString()
-      });
-
+  const createReturnRequest = wrap(
+    "step_03",
+    "createReturnRequest",
+    "创建退货申请",
+    z.object({ orderId: z.string(), reason: z.string().min(1) }),
+    async ({ orderId, reason }): Promise<{ output: any; status?: "success" | "fail"; error?: any }> => {
       const orderDetail = data.orderDetails.find((o: any) => o.orderId === orderId) ?? null;
-      if (!orderDetail) {
-        emitToolResult({
-          toolCallId: `${toolCallId}_r`,
-          traceId,
-          conversationId,
-          stepId: "step_03",
-          toolName: "createReturnRequest",
-          inputRedacted: { orderId, reason },
-          outputRedacted: {},
-          status: "fail",
-          latencyMs: Date.now() - started,
-          error: { code: "ORDER_NOT_FOUND", message: "Order not found" },
-          createdAt: new Date().toISOString()
-        });
-        return { created: false };
-      }
-
-      const returnId = `r_${Date.now()}`;
-      const returnAddress = "广东省深圳市南山区***路***号（售后仓）";
-      const nextSteps = "请在48小时内寄回商品，并保留物流单号。仓库签收后将进入退款流程。";
-
-      const output = {
-        created: true,
-        returnRequest: {
-          returnId,
-          orderId,
-          orderNo: orderDetail.orderNo,
-          reason,
-          status: "created",
-          createdAt: new Date().toISOString(),
-          returnAddress,
-          nextSteps
+      if (!orderDetail) return { output: { created: false }, status: "fail", error: { code: "ORDER_NOT_FOUND", message: "Order not found" } };
+      
+      return {
+        output: {
+          created: true,
+          returnRequest: {
+            returnId: `r_${Date.now()}`, orderId, orderNo: orderDetail.orderNo, reason, status: "created",
+            returnAddress: "广东省深圳市南山区***路***号（售后仓）",
+            nextSteps: "请在48小时内寄回商品，并保留物流单号。仓库签收后将进入退款流程。"
+          }
         }
       };
-
-      emitToolResult({
-        toolCallId: `${toolCallId}_r`,
-        traceId,
-        conversationId,
-        stepId: "step_03",
-        toolName: "createReturnRequest",
-        inputRedacted: { orderId, reason },
-        outputRedacted: output,
-        status: "success",
-        latencyMs: Date.now() - started,
-        error: null,
-        createdAt: new Date().toISOString()
-      });
-
-      return output;
-    },
-    {
-      name: "createReturnRequest",
-      description: "创建退货申请（演示用，返回退货单号与退货地址/下一步）",
-      schema: z.object({
-        orderId: z.string(),
-        reason: z.string().min(1)
-      })
     }
   );
 
-  const modifyOrderAddress = tool(
-    async ({ orderId, newAddress }: { orderId: string; newAddress: string }) => {
-      const started = Date.now();
-      const toolCallId = `tc_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-      markToolUsed();
-      emitToolCall({
-        toolCallId,
-        traceId,
-        conversationId,
-        stepId: "step_03",
-        toolName: "modifyOrderAddress",
-        inputRedacted: { orderId, newAddress },
-        outputRedacted: {},
-        status: "success",
-        latencyMs: 0,
-        error: null,
-        createdAt: new Date().toISOString()
-      });
-
+  const modifyOrderAddress = wrap(
+    "step_03",
+    "modifyOrderAddress",
+    "修改订单地址",
+    z.object({ orderId: z.string(), newAddress: z.string().min(1) }),
+    async ({ orderId, newAddress }): Promise<{ output: any; status?: "success" | "fail"; error?: any }> => {
       const orderDetail = data.orderDetails.find((o: any) => o.orderId === orderId) ?? null;
-      if (!orderDetail) {
-        emitToolResult({
-          toolCallId: `${toolCallId}_r`,
-          traceId,
-          conversationId,
-          stepId: "step_03",
-          toolName: "modifyOrderAddress",
-          inputRedacted: { orderId, newAddress },
-          outputRedacted: {},
-          status: "fail",
-          latencyMs: Date.now() - started,
-          error: { code: "ORDER_NOT_FOUND", message: "Order not found" },
-          createdAt: new Date().toISOString()
-        });
-        return { modified: false };
-      }
-
-      // Simulate address modification success
-      const output = {
-        modified: true,
-        orderNo: orderDetail.orderNo,
-        newAddress,
-        message: "地址修改成功"
-      };
-
-      emitToolResult({
-        toolCallId: `${toolCallId}_r`,
-        traceId,
-        conversationId,
-        stepId: "step_03",
-        toolName: "modifyOrderAddress",
-        inputRedacted: { orderId, newAddress },
-        outputRedacted: output,
-        status: "success",
-        latencyMs: Date.now() - started,
-        error: null,
-        createdAt: new Date().toISOString()
-      });
-
-      return output;
-    },
-    {
-      name: "modifyOrderAddress",
-      description: "修改订单的收货地址",
-      schema: z.object({
-        orderId: z.string(),
-        newAddress: z.string().min(1)
-      })
+      if (!orderDetail) return { output: { modified: false }, status: "fail", error: { code: "ORDER_NOT_FOUND", message: "Order not found" } };
+      return { output: { modified: true, orderNo: orderDetail.orderNo, newAddress, message: "地址修改成功" } };
     }
   );
 
@@ -1007,6 +668,76 @@ async function handleMcpCommands(params: {
   }
 
   return false;
+}
+
+function getLatestShipment(shipmentsById: any, linkedShipmentIds: string[]) {
+  for (const id of linkedShipmentIds) {
+    const sh = shipmentsById?.[id];
+    if (sh?.events?.length) return sh;
+  }
+  return null;
+}
+
+function inferShipmentIssue(shipment: any) {
+  if (!shipment) return { level: "unknown", issue: "no_shipment", title: "暂无物流信息", next: ["确认是否已发货或是否分包裹"] };
+  const status = String(shipment.status || "").toLowerCase();
+  const last = shipment.events?.at(-1);
+  const lastTime = last?.time ? new Date(last.time).getTime() : null;
+  const hoursSince = lastTime ? (Date.now() - lastTime) / 36e5 : null;
+
+  if (status.includes("exception")) {
+    return { level: "high", issue: "exception", title: "物流异常", hoursSince, last };
+  }
+  if (status.includes("delivered")) {
+    return { level: "medium", issue: "delivered", title: "已签收但仍投诉未收到", hoursSince, last };
+  }
+  if (hoursSince != null && hoursSince >= 48) {
+    return { level: "medium", issue: "stalled_48h", title: "48小时无更新", hoursSince, last };
+  }
+  return { level: "low", issue: "normal", title: "物流正常推进中", hoursSince, last };
+}
+
+function buildSopText(params: { orderNo: string; shipment: any; diag: any }) {
+  const { orderNo, shipment, diag } = params;
+  const last = diag?.last;
+  const base = `订单号：${orderNo}。物流：${shipment?.carrier ?? "-"}（${shipment?.trackingNoMasked ?? "-"}），状态：${shipment?.status ?? "-"}。`;
+  const lastLine = last ? `最新轨迹：${last.location} · ${last.description} · ${last.time}` : "最新轨迹：-";
+
+  if (diag.issue === "no_shipment") {
+    return `${base}\n${lastLine}\n\n结论：订单暂无包裹信息。\nSOP 建议：\n1) 核实是否已发货/是否分包裹\n2) 若已发货但无轨迹，建议联系承运商或站点核实\n3) 需要用户提供：收货人姓名/手机号后四位/期望处理方式（继续等/改址/退款）`;
+  }
+
+  if (diag.issue === "exception") {
+    return `${base}\n${lastLine}\n\n结论：物流显示异常（高优先级）。\nSOP 建议：\n1) 先核对地址与电话是否正确（右侧订单信息）\n2) 若 24 小时仍无恢复：发起催派/站点核实\n3) 若确认丢失/退回：按规则提供补发/退款方案（需二次确认）\n4) 需要用户提供：异常截图/签收证明（如有）`;
+  }
+
+  if (diag.issue === "stalled_48h") {
+    return `${base}\n${lastLine}\n\n结论：48 小时无更新，存在滞留风险。\nSOP 建议：\n1) 先安抚说明已在跟进，并给出时效（例如 24 小时内反馈）\n2) 同步核对地址/电话是否可联系\n3) 若仍无更新：发起催派/站点核实\n4) 需要用户提供：收货人可联系时间段`;
+  }
+
+  if (diag.issue === "delivered") {
+    return `${base}\n${lastLine}\n\n结论：系统显示已签收，但用户反馈未收到。\nSOP 建议：\n1) 引导用户先确认代收点/家人同事代收\n2) 让用户提供：签收截图/签收人信息（如有）\n3) 发起承运商签收证明/站点回访\n4) 如核实丢失：走理赔/补发流程（需二次确认）`;
+  }
+
+  return `${base}\n${lastLine}\n\n结论：物流正常推进中。\nSOP 建议：\n1) 告知用户最新节点与预计时效\n2) 若 48 小时无更新再反馈，我可继续按 SOP 协助`;
+}
+
+function buildCsReplyText(params: { orderNo: string; shipment: any; diag: any; tone: "short" | "standard" | "detailed" }) {
+  const { orderNo, shipment, diag, tone } = params;
+  const last = diag?.last;
+  const lastText = last ? `${new Date(last.time).toLocaleString()}，${last.location}，${last.description}` : "暂无最新轨迹";
+  const carrier = shipment?.carrier ?? "承运商";
+  const status = shipment?.status ?? "-";
+
+  if (tone === "short") {
+    return `已为您查询订单 ${orderNo}：${carrier}，状态${status}。最新轨迹：${lastText}。如 48 小时无更新我会继续协助跟进。`;
+  }
+
+  if (tone === "detailed") {
+    return `您好，我已为您核实订单号：${orderNo}。\n物流：${carrier}（${shipment?.trackingNoMasked ?? "-"}），当前状态：${status}。\n最新轨迹：${lastText}。\n\n处理建议：\n- 若后续 48 小时无更新，我可按流程协助催派/核实站点。\n- 如需改地址/退货等操作，我也可以在发货前协助处理（会有二次确认弹窗）。\n请问您更希望：继续等待 / 催派跟进 / 修改地址？`;
+  }
+
+  return `您好，我已查询到订单号：${orderNo}。\n物流：${carrier}，当前状态：${status}。\n最新轨迹：${lastText}。\n我会持续帮您关注，如 48 小时无更新可继续反馈，我将按流程协助处理。`;
 }
 
 async function resolveOrderIdOrAsk(params: {
@@ -1088,6 +819,13 @@ export async function runLangChainAgent(params: {
   const data = await loadSampleData();
   const conversation = data.conversations.find((c: any) => c.conversationId === conversationId) ?? null;
   const linkedOrderId = conversation?.linkedOrderId ?? null;
+  const linkedShipmentIds = (() => {
+    const od = linkedOrderId ? data.orderDetails.find((o: any) => o.orderId === linkedOrderId) : null;
+    return Array.isArray(od?.shipmentIds) ? od.shipmentIds : [];
+  })();
+  const shipmentsById: Record<string, any> = Object.fromEntries(
+    (data.shipments ?? []).map((s: any) => [s.shipmentId, s])
+  );
 
   let toolUsed = false;
   const markToolUsed = () => {
@@ -1108,6 +846,61 @@ export async function runLangChainAgent(params: {
       sqliteQuery: tools.sqliteQuery
     });
     if (handled) return;
+  }
+
+  // 1.5) “一键生成客服回复” 与 “物流异常诊断 + SOP” 的快捷指令（不依赖外部模型）
+  if (/^\/reply$/i.test(userMessage.trim())) {
+    const steps: PlanStep[] = [
+      { stepId: "step_01", title: "汇总订单与物流", status: "running" },
+      { stepId: "step_02", title: "生成客服回复", status: "pending" }
+    ];
+    sendSseEvent(res, "plan_update", { traceId, steps });
+
+    const orderId = context?.orderId ?? linkedOrderId;
+    const orderDetail = orderId ? (await tools.getOrderDetail.invoke({ orderId }) as any)?.orderDetail : null;
+    const orderNo = orderDetail?.orderNo ?? conversation?.title ?? conversationId;
+    const shipment = getLatestShipment(shipmentsById, orderDetail?.shipmentIds ?? linkedShipmentIds);
+    const diag = inferShipmentIssue(shipment);
+
+    steps[0].status = "done";
+    steps[1].status = "running";
+    sendSseEvent(res, "plan_update", { traceId, steps });
+
+    const text =
+      `【可复制客服回复】\n` +
+      `- 简短版：${buildCsReplyText({ orderNo, shipment, diag, tone: "short" })}\n\n` +
+      `- 标准版：\n${buildCsReplyText({ orderNo, shipment, diag, tone: "standard" })}\n\n` +
+      `- 详细版：\n${buildCsReplyText({ orderNo, shipment, diag, tone: "detailed" })}`;
+    await streamText(res, traceId, text, conversationId);
+
+    steps[1].status = "done";
+    sendSseEvent(res, "plan_update", { traceId, steps });
+    return;
+  }
+
+  if (/^\/diagnose$/i.test(userMessage.trim())) {
+    const steps: PlanStep[] = [
+      { stepId: "step_01", title: "读取最新轨迹", status: "running" },
+      { stepId: "step_02", title: "输出异常诊断与 SOP", status: "pending" }
+    ];
+    sendSseEvent(res, "plan_update", { traceId, steps });
+
+    const orderId = context?.orderId ?? linkedOrderId;
+    const orderDetail = orderId ? (await tools.getOrderDetail.invoke({ orderId }) as any)?.orderDetail : null;
+    const orderNo = orderDetail?.orderNo ?? conversation?.title ?? conversationId;
+    const shipment = getLatestShipment(shipmentsById, orderDetail?.shipmentIds ?? linkedShipmentIds);
+    const diag = inferShipmentIssue(shipment);
+
+    steps[0].status = "done";
+    steps[1].status = "running";
+    sendSseEvent(res, "plan_update", { traceId, steps });
+
+    const text = `【物流异常诊断 + SOP】\n${buildSopText({ orderNo, shipment, diag })}`;
+    await streamText(res, traceId, text, conversationId);
+
+    steps[1].status = "done";
+    sendSseEvent(res, "plan_update", { traceId, steps });
+    return;
   }
 
   // 2) Human-in-the-loop 回流：用户在前端 ConfirmModal 点击“确认执行”后，context.confirm 会带回来。

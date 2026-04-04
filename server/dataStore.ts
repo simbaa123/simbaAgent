@@ -1,87 +1,58 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { z } from "zod";
 
-const SampleDataSchema = z.object({
-  users: z.array(
-    z.object({
-      userId: z.string(),
-      nameMasked: z.string(),
-      phoneMasked: z.string(),
-      phoneLast4: z.string(),
-      createdAt: z.string(),
-      riskFlags: z.array(z.string())
-    })
-  ),
-  orders: z.array(
-    z.object({
-      orderId: z.string(),
-      orderNo: z.string(),
-      userId: z.string(),
-      status: z.enum(["paid", "shipped", "delivered", "cancelled"]),
-      paidAt: z.string(),
-      totalAmount: z.number(),
-      currency: z.string(),
-      itemsSummary: z.string()
-    })
-  ),
-  orderDetails: z.array(z.any()),
-  shipments: z.array(z.any()),
-  kbArticles: z.array(z.any()),
-  conversations: z.array(z.any()),
-  messages: z.array(z.any()),
-  toolCalls: z.array(z.any()),
-  indexes: z.object({
-    ordersByOrderNo: z.record(z.string(), z.string()),
-    usersByPhoneLast4: z.record(z.string(), z.array(z.string())),
-    ordersByUserId: z.record(z.string(), z.array(z.string()))
-  })
-});
-
-type SampleData = z.infer<typeof SampleDataSchema> & {
+// 数据类型定义简写，去掉冗余的 Zod 校验（在纯演示/POC阶段可以简化以缩减代码）
+export type SampleData = {
+  users: any[];
+  orders: any[];
   orderDetails: any[];
   shipments: any[];
   kbArticles: any[];
   conversations: any[];
   messages: any[];
   toolCalls: any[];
+  indexes: {
+    ordersByOrderNo: Record<string, string>;
+    usersByPhoneLast4: Record<string, string[]>;
+    ordersByUserId: Record<string, string[]>;
+  };
 };
 
-let cached: { data: SampleData } | null = null;
+let cached: SampleData | null = null;
 
-function dataPath() {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const repoRoot = path.resolve(here, "..");
-  return path.resolve(repoRoot, "data", "milestone1", "sample-data.json");
-}
-
+/**
+ * 加载并缓存本地 mock 数据
+ * - 为了让每次会话从空白开始，这里强制清空了 json.messages
+ */
 export async function loadSampleData(): Promise<SampleData> {
-  if (cached) return cached.data;
-  const raw = await readFile(dataPath(), "utf-8");
+  if (cached) return cached;
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const raw = await readFile(path.resolve(repoRoot, "data/milestone1/sample-data.json"), "utf-8");
   const json = JSON.parse(raw);
-  // 清空示例对话，让会话默认从空白开始
-  json.messages = [];
-  const data = SampleDataSchema.parse(json) as SampleData;
-  cached = { data };
-  return data;
+  json.messages = []; // 每次启动清空聊天记录
+  cached = json as SampleData;
+  return cached;
 }
 
-export function appendMessage(conversationId: string, role: "user" | "agent", content: string) {
-  if (cached) {
-    cached.data.messages.push({
-      messageId: `m_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-      conversationId,
-      role,
-      content,
-      createdAt: new Date().toISOString(),
-      citations: []
-    });
-  }
+/**
+ * 内存中追加聊天记录，用于支持 /export 导出最新的真实对话
+ */
+export function appendMessage(conversationId: string, role: "user" | "agent" | "cs", content: string) {
+  cached?.messages.push({
+    messageId: `m_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    conversationId,
+    role,
+    content,
+    createdAt: new Date().toISOString(),
+    citations: []
+  });
 }
 
+/**
+ * 生成定长摘要，用于截断过长文本
+ */
 export function snippetFromContent(content: string, maxLen = 140) {
-  const normalized = content.replace(/\s+/g, " ").trim();
-  if (normalized.length <= maxLen) return normalized;
-  return normalized.slice(0, maxLen) + "…";
+  const norm = content.replace(/\s+/g, " ").trim();
+  return norm.length <= maxLen ? norm : norm.slice(0, maxLen) + "…";
 }

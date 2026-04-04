@@ -16,6 +16,8 @@
 
 相关说明文档：
 - docs/agent-langchain-flow.md（Agent + LangChain + Tools/MCP + RAG 引用卡片）
+- docs/技术文档.md（需求分析/设计思路/技术选型/具体实现）
+- docs/面试复习稿.md（面试系统介绍模板与问答要点）
 
 ## 技术栈
 
